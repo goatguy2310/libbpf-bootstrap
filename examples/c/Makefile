@@ -1,7 +1,8 @@
-# PDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+# SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 HEADER_OVERRIDE := .header_override
 OUTPUT := .output
 BPF_OUTPUT := .bpf_output
+BIN_OUTPUT := .bin_output
 CLANG ?= clang
 LIBBPF_SRC := $(abspath ../../libbpf/src)
 BPFTOOL_SRC := $(abspath ../../bpftool/src)
@@ -19,8 +20,11 @@ VMLINUX := ../../vmlinux.h/include/$(ARCH)/vmlinux.h
 # Use our own libbpf API headers and Linux UAPI headers distributed with
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
-INCLUDES := -I$(HEADER_OVERRIDE) -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
-CFLAGS := -Wno-unknown-attributes -mcmodel=large -fno-pie -nopie -nostartfiles
+INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
+CFLAGS := -g -Wall
+
+INCLUDES_BPF := -I$(HEADER_OVERRIDE) $(INCLUDES)
+CFLAGS_BPF := -Wno-unknown-attributes -mcmodel=large -fno-pie -nopie -nostartfiles
 
 LINKER_SCRIPTS := .linker_scripts
 LINKING_COMMAND := -Wl,-T,
@@ -62,7 +66,7 @@ $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
 .PHONY: all
-all: $(foreach app, $(APPS), $(BPF_OUTPUT)/$(app).bpf)
+all: $(foreach app, $(APPS), $(BIN_OUTPUT)/$(app) $(BPF_OUTPUT)/$(app).bpf)
 # all: $(BPF_OUTPUT)/$(APPS).bpf
 
 .PHONY: clean
@@ -70,7 +74,7 @@ clean:
 	$(call msg,CLEAN)
 	$(Q)rm -rf $(OUTPUT) $(APPS) $(BPF_OUTPUT) $(HEADER_OVERRIDE)
 
-$(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT) $(BPF_OUTPUT):
+$(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT) $(BIN_OUTPUT) $(BPF_OUTPUT):
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
 
@@ -96,14 +100,41 @@ $(HEADER_OVERRIDE): bpf_core_read.h $(LIBBPF_OBJ) $(BPFTOOL)
 	$(Q)python3 scripts/map_bpf_helper.py scripts/bpf_id_func_mapping.txt
 	$(Q)python3 scripts/modify_header.py $(abspath $(OUTPUT))/bpf/bpf_helper_defs.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_helper_defs.h scripts/bpf_id_func_mapping.txt
 
-# Build BPF code
+# Build BPF code to native code (First task)
 $(BPF_OUTPUT)/%.bpf: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPF_OUTPUT) $(BPFTOOL) $(HEADER_OVERRIDE)
 	$(call msg,BPF,$@)
 	$(if $(wildcard $(LINKER_SCRIPTS)/$*_globals.ld),$(call msg,LINKSCRIPT,$(LINKER_SCRIPTS)/$*_globals.ld)) 
-	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS)                                                               \
-		     $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		                                                 \
+	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                                                           \
+		     $(INCLUDES_BPF) $(CLANG_BPF_SYS_INCLUDES)		                                                 \
 		     $(if $(wildcard $(LINKER_SCRIPTS)/$*_globals.ld),$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*_globals.ld) \
 		     $< -o $@
+
+# --------------------------------------------------
+# Build BPF code to BPF bytecode (Second task)
+$(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPFTOOL)
+	$(call msg,BPF,$@)
+	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH)		      \
+		     $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		      \
+		     -c $(filter %.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+
+# Generate BPF skeletons
+$(OUTPUT)/%.skel.h: $(OUTPUT)/%.bpf.o | $(OUTPUT) $(BPFTOOL)
+	$(call msg,GEN-SKEL,$@)
+	$(Q)$(BPFTOOL) gen skeleton $< > $@
+
+# Build user-space code
+$(patsubst %,$(OUTPUT)/%.o,$(APPS)): %.o: %.skel.h
+
+$(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -c $(filter %.c,$^) -o $@
+
+# Build application binary
+$(BIN_OUTPUT)/%: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT) $(BIN_OUTPUT)
+	$(call msg,BINARY,$@)
+	$(Q)$(CC) $(CFLAGS) $^ $(ALL_LDFLAGS) -lelf -lz -o $@
+
 
 # delete failed targets
 .DELETE_ON_ERROR:
