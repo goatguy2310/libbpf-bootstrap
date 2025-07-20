@@ -1,15 +1,16 @@
 SECTIONS
 {
-	exec_start = 0xfffffffffffffffa;
-	rb = 0xfffffffffffffffb;
-	min_duration_ns = 0xfffffffffffffffc;
 
+	my_pid = 0xfffffffffffffffa;
+
+	. = 0x400000;
+	.text : { *(.text) }
 	.rodata 0xffffffff00000000 : { *(.rodata*) }
 
 	/DISCARD/ :
 	{
 		*(.eh_frame*)
-
+		
 		*(.interp)
 		*(.dynamic)
 		*(.dynsym)

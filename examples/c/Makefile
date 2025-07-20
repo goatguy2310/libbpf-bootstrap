@@ -20,7 +20,7 @@ VMLINUX := ../../vmlinux.h/include/$(ARCH)/vmlinux.h
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
 INCLUDES := -I$(HEADER_OVERRIDE) -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
-CFLAGS := -Wno-unknown-attributes -mcmodel=large -fno-pic -fno-pie -nopie -nostartfiles
+CFLAGS := -Wno-unknown-attributes -mcmodel=large -fno-pie -nopie -nostartfiles
 
 LINKER_SCRIPTS := .linker_scripts
 LINKING_COMMAND := -Wl,-T,
