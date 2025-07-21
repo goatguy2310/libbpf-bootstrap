@@ -1,6 +1,7 @@
 /.output
 /.bin_output
 /.bpf_output
+/.linker_scripts
 /.header_override
 /scripts/bpf_id_func_mapping.txt
 /bootstrap
@@ -19,3 +20,4 @@
 /lsm
 /cmake-build-debug/
 /cmake-build-release/
+/logs

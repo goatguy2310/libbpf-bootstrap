@@ -2,7 +2,7 @@
 HEADER_OVERRIDE := .header_override
 OUTPUT := .output
 BPF_OUTPUT := .bpf_output
-BIN_OUTPUT := .bin_output
+LOADER_OUTPUT := .loader_output
 CLANG ?= clang
 LIBBPF_SRC := $(abspath ../../libbpf/src)
 BPFTOOL_SRC := $(abspath ../../bpftool/src)
@@ -65,9 +65,10 @@ endef
 $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
-.PHONY: all tidy clean
-all: $(foreach app, $(APPS), $(BIN_OUTPUT)/$(app) $(BPF_OUTPUT)/$(app).bpf)
-# all: $(BPF_OUTPUT)/$(APPS).bpf
+.PHONY: all loader tidy clean
+all: $(foreach app, $(APPS), $(LOADER_OUTPUT)/$(app) $(BPF_OUTPUT)/$(app).bpf)
+
+loader: $(foreach app, $(APPS), $(LOADER_OUTPUT)/$(app))
 
 tidy:
 	$(call msg,TIDY)
@@ -75,9 +76,9 @@ tidy:
 
 clean: tidy
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) $(BIN_OUTPUT)
+	$(Q)rm -rf $(OUTPUT) $(LOADER_OUTPUT)
 
-$(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT) $(BIN_OUTPUT) $(BPF_OUTPUT):
+$(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT) $(LOADER_OUTPUT) $(BPF_OUTPUT):
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
 
@@ -106,10 +107,10 @@ $(HEADER_OVERRIDE): bpf_core_read.h $(LIBBPF_OBJ) $(BPFTOOL)
 # Build BPF code to native code (First task)
 $(BPF_OUTPUT)/%.bpf: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPF_OUTPUT) $(BPFTOOL) $(HEADER_OVERRIDE)
 	$(call msg,BPF,$@)
-	$(if $(wildcard $(LINKER_SCRIPTS)/$*_globals.ld),$(call msg,LINKSCRIPT,$(LINKER_SCRIPTS)/$*_globals.ld)) 
+	$(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(call msg,LINKSCRIPT,$(LINKER_SCRIPTS)/$*.ld)) 
 	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                                                           \
 		     $(INCLUDES_BPF) $(CLANG_BPF_SYS_INCLUDES)		                                                 \
-		     $(if $(wildcard $(LINKER_SCRIPTS)/$*_globals.ld),$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*_globals.ld) \
+		     $(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*.ld) \
 		     $< -o $@
 
 # --------------------------------------------------
@@ -134,7 +135,7 @@ $(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
 	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -c $(filter %.c,$^) -o $@
 
 # Build application binary
-$(BIN_OUTPUT)/%: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT) $(BIN_OUTPUT)
+$(LOADER_OUTPUT)/%: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT) $(LOADER_OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ $(ALL_LDFLAGS) -lelf -lz -o $@
 
