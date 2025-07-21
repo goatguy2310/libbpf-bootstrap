@@ -1,4 +1,8 @@
 /.output
+/.bin_output
+/.bpf_output
+/.header_override
+/scripts/bpf_id_func_mapping.txt
 /bootstrap
 /minimal
 /minimal_legacy
