@@ -5,7 +5,7 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-int my_pid = 69;
+int my_pid = 0;
 
 SEC("tp/syscalls/sys_enter_write")
 int handle_tp(void *ctx)
@@ -16,6 +16,7 @@ int handle_tp(void *ctx)
 		return 0;
 
 	bpf_printk("BPF triggered from PID %d.\n", pid);
+	bpf_printk("Bonjour\n");
 
 	return 0;
 }

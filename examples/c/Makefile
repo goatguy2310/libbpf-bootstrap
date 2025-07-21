@@ -65,14 +65,17 @@ endef
 $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
-.PHONY: all
+.PHONY: all tidy clean
 all: $(foreach app, $(APPS), $(BIN_OUTPUT)/$(app) $(BPF_OUTPUT)/$(app).bpf)
 # all: $(BPF_OUTPUT)/$(APPS).bpf
 
-.PHONY: clean
-clean:
+tidy:
+	$(call msg,TIDY)
+	$(Q)rm -rf $(BPF_OUTPUT) $(HEADER_OVERRIDE) scripts/bpf_id_func_mapping.txt
+
+clean: tidy
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) $(APPS) $(BPF_OUTPUT) $(HEADER_OVERRIDE)
+	$(Q)rm -rf $(OUTPUT) $(BIN_OUTPUT)
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT) $(BIN_OUTPUT) $(BPF_OUTPUT):
 	$(call msg,MKDIR,$@)
