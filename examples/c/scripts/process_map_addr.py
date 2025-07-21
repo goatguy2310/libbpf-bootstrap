@@ -49,7 +49,7 @@ with open(parent_path / args.log_file, "r") as f:
 
 script = template.replace("MAP_PLACEHOLDER", map_addr).replace("INTERNAL_PLACEHOLDER", internal_addr)
 
-print(script)
+# print(script)
 
 with open(parent_path / f".linker_scripts/{args.prog}.ld", "w") as f:
     f.write(script)
