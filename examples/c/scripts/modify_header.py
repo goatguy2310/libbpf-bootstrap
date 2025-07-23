@@ -4,15 +4,17 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument("def_file")
 parser.add_argument("output_file")
-parser.add_argument("map_file")
+parser.add_argument("prog_type")
+parser.add_argument("table_file")
 
 args = parser.parse_args()
 
 id_to_addr = dict()
-with open(args.map_file, "r") as f:
-    for l in f:
-        id, fun, addr = l.split()
-        id_to_addr[int(id)] = (fun, addr)
+with open(args.table_file, "r") as f:
+    lines = f.read().split("\n")[1:]
+    helpers = lines[int(args.prog_type)].split(", ")
+    for j, addr in enumerate(helpers):
+        id_to_addr[j] = addr
 # print(id_to_addr)
 
 res = ""
@@ -30,13 +32,8 @@ with open(args.def_file, "r") as f:
             res += l
             continue
 
-        info = id_to_addr[int(id)]
-        if info[0] not in l:
-            res += l
-            continue
-
-        # print(id, info)
-        res += f"{pre} 0x{info[1]};\n"
+        # print(id, id_to_addr)
+        res += f"{pre} 0x{id_to_addr[int(id)]};\n"
 
 with open(args.output_file, "w") as f:
     f.write(res)

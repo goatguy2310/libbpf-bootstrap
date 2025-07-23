@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+PROG_TYPE ?=
+
 HEADER_OVERRIDE := .header_override
 OUTPUT := .output
 BPF_OUTPUT := .bpf_output
@@ -23,7 +25,6 @@ VMLINUX := ../../vmlinux.h/include/$(ARCH)/vmlinux.h
 INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 
-INCLUDES_BPF := -I$(HEADER_OVERRIDE) $(INCLUDES)
 CFLAGS_BPF := -Wno-unknown-attributes -mcmodel=large -fno-pie -nopie -nostartfiles
 
 LINKER_SCRIPTS := .linker_scripts
@@ -72,11 +73,11 @@ loader: $(foreach app, $(APPS), $(LOADER_OUTPUT)/$(app))
 
 tidy:
 	$(call msg,TIDY)
-	$(Q)rm -rf $(BPF_OUTPUT) $(HEADER_OVERRIDE) scripts/bpf_id_func_mapping.txt
+	$(Q)rm -rf $(LOADER_OUTPUT) $(BPF_OUTPUT) $(HEADER_OVERRIDE) scripts/bpf_id_func_mapping.txt
 
 clean: tidy
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) $(LOADER_OUTPUT)
+	$(Q)rm -rf $(OUTPUT)
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT) $(LOADER_OUTPUT) $(BPF_OUTPUT):
 	$(call msg,MKDIR,$@)
@@ -95,23 +96,25 @@ $(BPFTOOL): | $(BPFTOOL_OUTPUT)
 	$(call msg,BPFTOOL,$@)
 	$(Q)$(MAKE) ARCH= CROSS_COMPILE= OUTPUT=$(BPFTOOL_OUTPUT)/ -C $(BPFTOOL_SRC) bootstrap
 
-$(HEADER_OVERRIDE): bpf_core_read.h $(LIBBPF_OBJ) $(BPFTOOL)
-	$(call msg,MKDIR,$@)
-	$(Q)mkdir -p $@ $@/bpf
-	$(call msg,GENHEADER,$@)
-	$(Q)cp $(abspath $(OUTPUT))/bpf/bpf_helpers.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_helpers.h
-	$(Q)cp bpf_core_read.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_core_read.h
-	$(Q)python3 scripts/map_bpf_helper.py scripts/bpf_id_func_mapping.txt
-	$(Q)python3 scripts/modify_header.py $(abspath $(OUTPUT))/bpf/bpf_helper_defs.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_helper_defs.h scripts/bpf_id_func_mapping.txt
+# $(HEADER_OVERRIDE): bpf_core_read.h $(LIBBPF_OBJ) $(BPFTOOL)
+# 	$(call msg,MKDIR,$@)
+# 	$(Q)mkdir -p $@ $@/bpf
+#	$(call msg,GENHEADER,$@)
+#	$(Q)cp $(abspath $(OUTPUT))/bpf/bpf_helpers.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_helpers.h
+#	$(Q/)cp bpf_core_read.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_core_read.h
+#	$(Q)python3 scripts/map_bpf_helper.py scripts/bpf_id_func_mapping.txt
+#	$(Q)python3 scripts/modify_header.py $(abspath $(OUTPUT))/bpf/bpf_helper_defs.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_helper_defs.h scripts/bpf_id_func_mapping.txt
 
 # Build BPF code to native code (First task)
-$(BPF_OUTPUT)/%.bpf: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPF_OUTPUT) $(BPFTOOL) $(HEADER_OVERRIDE)
+$(BPF_OUTPUT)/%.bpf: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPF_OUTPUT) $(BPFTOOL)
 	$(call msg,BPF,$@)
+	$(if $(wildcard $(HEADER_OVERRIDE)/$(PROG_TYPE)/),$(call msg,HEADER,$(HEADER_OVERRIDE)/$(PROG_TYPE)/)) 
 	$(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(call msg,LINKSCRIPT,$(LINKER_SCRIPTS)/$*.ld)) 
-	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                                                           \
-		     $(INCLUDES_BPF) $(CLANG_BPF_SYS_INCLUDES)		                                                 \
-		     $(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*.ld) \
-		     $< -o $@
+	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                                      \
+		$(if $(wildcard $(HEADER_OVERRIDE)/$(PROG_TYPE)/),-I$(HEADER_OVERRIDE)/$(PROG_TYPE)/)    \
+		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		                                    \
+		$(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*.ld) \
+		$< -o $@
 
 # --------------------------------------------------
 # Build BPF code to BPF bytecode (Second task)
