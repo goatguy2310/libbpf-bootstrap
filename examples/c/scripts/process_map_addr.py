@@ -32,7 +32,7 @@ ld_template = script_path / "template.ld"
 
 map_addr = ""
 internal_addr = ""
-prog_type = -1
+progs = dict()
 
 with open(ld_template) as f:
     template = f.read()
@@ -47,8 +47,8 @@ with open(parent_path / args.log_file, "r") as f:
             map_addr += f"\t{data['name']} = 0x{data['addr']};\n"
         elif data["type"] == "intsec":
             internal_addr += "\t" + data['sec_name'] + " 0x" + data['addr'] + ": { *(" + data['sec_name'] + "*) }\n"
-        elif data["type"] == "load_end":
-            prog_type = data["cur_prog_type"]
+        elif data["type"] == "load_end" and len(data["prog_name"]):
+            progs[data["prog_name"]] = (data["cur_prog_type"], data["prog_addr"])    
 
 script = template.replace("MAP_PLACEHOLDER", map_addr).replace("INTERNAL_PLACEHOLDER", internal_addr)
 
@@ -57,4 +57,7 @@ script = template.replace("MAP_PLACEHOLDER", map_addr).replace("INTERNAL_PLACEHO
 with open(parent_path / f".linker_scripts/{args.prog}.ld", "w") as f:
     f.write(script)
 
-print(prog_type)
+with open(script_path/ "progs_info.csv", "w") as f:
+    f.write("name, type, addr\n")
+    for name, (ptype, addr) in progs.items():
+        f.write(f"{name},{ptype},{addr}\n")

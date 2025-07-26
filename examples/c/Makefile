@@ -18,14 +18,17 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 			 | sed 's/mips.*/mips/' \
 			 | sed 's/riscv64/riscv/' \
 			 | sed 's/loongarch64/loongarch/')
-VMLINUX := ../../vmlinux.h/include/$(ARCH)/vmlinux.h
+# VMLINUX := ../../vmlinux.h/include/$(ARCH)/vmlinux.h
+# use our own generated vmlinux.h for now
+VMLINUX := vmlinux/vmlinux.h
+
 # Use our own libbpf API headers and Linux UAPI headers distributed with
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
 INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 
-CFLAGS_BPF := -Wno-unknown-attributes -mcmodel=large -fno-pie -nopie -nostartfiles
+CFLAGS_BPF := -Wno-unknown-attributes -mcmodel=large -fno-pie -nopie -nostartfiles -fno-omit-frame-pointer -fcf-protection
 
 LINKER_SCRIPTS := .linker_scripts
 LINKING_COMMAND := -Wl,-T,
@@ -110,10 +113,10 @@ $(BPF_OUTPUT)/%.bpf: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT
 	$(call msg,BPF,$@)
 	$(if $(wildcard $(HEADER_OVERRIDE)/$(PROG_TYPE)/),$(call msg,HEADER,$(HEADER_OVERRIDE)/$(PROG_TYPE)/)) 
 	$(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(call msg,LINKSCRIPT,$(LINKER_SCRIPTS)/$*.ld)) 
-	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                                      \
-		$(if $(wildcard $(HEADER_OVERRIDE)/$(PROG_TYPE)/),-I$(HEADER_OVERRIDE)/$(PROG_TYPE)/)    \
-		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		                                    \
-		$(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*.ld) \
+	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                                        \
+		$(if $(wildcard $(HEADER_OVERRIDE)/$(PROG_TYPE)/),-I$(HEADER_OVERRIDE)/$(PROG_TYPE)/) \
+		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		                                      \
+		$(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*.ld)   \
 		$< -o $@
 
 # --------------------------------------------------
