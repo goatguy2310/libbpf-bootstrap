@@ -21,6 +21,7 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 # VMLINUX := ../../vmlinux.h/include/$(ARCH)/vmlinux.h
 # use our own generated vmlinux.h for now
 VMLINUX := vmlinux/vmlinux.h
+VMLINUX_SRC := /sys/kernel/btf/vmlinux
 
 # Use our own libbpf API headers and Linux UAPI headers distributed with
 # libbpf to avoid dependency on system-wide headers, which could be missing or
@@ -85,6 +86,11 @@ clean: tidy
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT) $(LOADER_OUTPUT) $(BPF_OUTPUT):
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
+
+$(VMLINUX): $(VMLINUX_SRC)
+	$(call msg,VMLINUX,$@)
+	$(Q)mkdir -p vmlinux
+	$(Q)bpftool btf dump file $(VMLINUX_SRC) format c > $(VMLINUX)
 
 # Build libbpf
 $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.[ch] $(LIBBPF_SRC)/Makefile) | $(OUTPUT)/libbpf

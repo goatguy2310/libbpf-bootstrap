@@ -45,10 +45,6 @@ log "Linker script saved at .linker_scripts/$1.ld"
 
 kill $DMESG_PID
 
-log "Generating vmlinux.h..."
-mkdir -p vmlinux/
-bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux/vmlinux.h
-
 log "Looping through all progs... (1 for now)"
 
 tail -n +2 $PROGS_INFO | while IFS=',' read -r PROG_NAME PROG_TYPE PROG_ADDR; do
@@ -64,6 +60,11 @@ tail -n +2 $PROGS_INFO | while IFS=',' read -r PROG_NAME PROG_TYPE PROG_ADDR; do
 	log "Making BPF native code..."
 	rm -rf .bpf_output/$1.bpf
 	make .bpf_output/$1.bpf PROG_TYPE=$PROG_TYPE
+
+	if [ ! -f lkm/replace.ko ]; then
+		(cd lkm && make)
+		log "Compiling kernel module..."
+	fi
 
 	log "Starting kernel module..."
 	insmod lkm/replace.ko
