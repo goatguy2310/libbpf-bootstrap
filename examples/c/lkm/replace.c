@@ -7,6 +7,7 @@
 #include <linux/bpf.h>
 #include <linux/rcupdate.h>
 #include <linux/vmalloc.h>
+#include <linux/mutex.h>
 #include <asm/set_memory.h>
 
 void *bpf_jit_alloc_exec(unsigned long size);
@@ -20,70 +21,90 @@ struct bpf_replace_header {
 	u64 code_size;
 };
 
+struct bpf_prog_replace_info {
+	void *new_bpf_func;
+	void *old_bpf_func;
+	u32 old_jited_len;
+	struct bpf_prog *targ_prog;
+};
+
+#define MAX_REPLACEMENT 32
+static u32 rprog_idx = 0;
+static struct bpf_prog_replace_info rprog_infos[MAX_REPLACEMENT];
+
+static DEFINE_MUTEX(replace_mutex);
+
 static struct dentry *replace_dir; 
 
-static struct bpf_prog *targ_prog = NULL;
-static void *old_bpf_func = NULL;
-static void *new_bpf_func = NULL;
-static u32 old_jited_len = 0;
-
 static ssize_t bpf_replace_write(struct file *fp, const char *buf, size_t count, loff_t *off) {
-	if (targ_prog) {
-		/* maybe restore old program if a new program replacement is invoked */
-		pr_err("bpf_replace: another bpf program is being replaced\n");
-		return -1;
+	int ret = 0;
+
+	mutex_lock(&replace_mutex);
+	
+	if (rprog_idx >= MAX_REPLACEMENT) {
+		pr_warn("bpf_replace: maximum bpf programs replacement reached (%u)\n", MAX_REPLACEMENT);
+		ret = -ENOSPC;
+		goto out;
 	}
 	
 	struct bpf_replace_header header;
 	size_t header_size = sizeof(header);
+	void *new_bpf_func;
 	struct bpf_prog *prog;
 
 	u32 code_size_aligned;
 
 	if (count < header_size) {
 		pr_err("bpf_replace: write too small\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	/* copy only the header, the rest (code) still stay in buf */
 	if (copy_from_user(&header, buf, header_size)) {
 		pr_err("bpf_replace: failed to copy program from user\n");
-		return -EFAULT;
+		ret = -EFAULT;
+		goto out;
 	}
 
 	if (count != header_size + header.code_size) {
 		pr_err("bpf_replace: size mismatched\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	prog = (struct bpf_prog *) header.bpf_prog_addr;
-	pr_info("bpf_replace: hooking bpf_prog at addr 0x%llx\n", header.bpf_prog_addr);
+	pr_info("bpf_replace: hooking bpf_prog at addr 0x%llx and name %s\n", header.bpf_prog_addr, prog->aux->name);
 
 	code_size_aligned = round_up(header.code_size, PAGE_SIZE);
 	new_bpf_func = bpf_jit_alloc_exec(code_size_aligned);
 	if (!new_bpf_func) {
 		pr_err("bpf_replace: cannot allocate memory for new func\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out;
 	}
 
 	if (copy_from_user(new_bpf_func, buf + header_size, header.code_size)) {
 		pr_err("bpf_replace: failed to copy program to new memory\n");
 		bpf_jit_free_exec(new_bpf_func);
-		return -EFAULT;
+		ret = -EFAULT;
+		goto out;
 	}
 
 	set_vm_flush_reset_perms(new_bpf_func);
 	if (set_memory_rox((unsigned long) new_bpf_func, code_size_aligned >> PAGE_SHIFT)) {
 		pr_err("bpf_replace: failed to set program to ROX\n");
 		bpf_jit_free_exec(new_bpf_func);
-		return -EFAULT;
+		ret = -EFAULT;
+		goto out;
 	}
 
 	pr_info("bpf_replace: replacing func 0x%px, len %u\n", prog->bpf_func, prog->jited_len);
 
-	old_bpf_func = prog->bpf_func;
-	old_jited_len = prog->jited_len;
-	targ_prog = prog;
+	rprog_infos[rprog_idx].new_bpf_func = new_bpf_func;
+	rprog_infos[rprog_idx].old_bpf_func = prog->bpf_func;
+	rprog_infos[rprog_idx].old_jited_len = prog->jited_len;
+	rprog_infos[rprog_idx].targ_prog = prog;
 
 	prog->bpf_func = new_bpf_func;
 	prog->jited_len = header.code_size;
@@ -91,7 +112,12 @@ static ssize_t bpf_replace_write(struct file *fp, const char *buf, size_t count,
 	synchronize_rcu();
 
 	pr_info("bpf_replace: success with new func 0x%px, len %u\n", prog->bpf_func, prog->jited_len);
-	return count;
+	rprog_idx++;
+	ret = count;
+
+out:
+	mutex_unlock(&replace_mutex);
+	return ret;
 }
 
 static const struct file_operations bpf_replace_fops = {
@@ -107,20 +133,25 @@ static int __init replace_init(void) {
 }
 
 static void __exit replace_cleanup(void) {
-	pr_info("bpf_replace: exiting module");
+	pr_info("bpf_replace: exiting module and restoring programs");
+	mutex_lock(&replace_mutex);
 
-	if (targ_prog) {
-		pr_info("bpf_replace: restoring original prog\n");
+	while(rprog_idx > 0) {
+		rprog_idx--;
+		
+		struct bpf_prog_replace_info *info = &rprog_infos[rprog_idx];
+		pr_info("bpf_replace: restoring prog idx %u, 0x%px and name %s\n", rprog_idx, info->targ_prog, info->targ_prog->aux->name);
 
-		targ_prog->bpf_func = old_bpf_func;
-		targ_prog->jited_len = old_jited_len;
+		info->targ_prog->bpf_func = info->old_bpf_func;
+		info->targ_prog->jited_len = info->old_jited_len;	
 
-		synchronize_rcu();
-
-		pr_info("bpf_replace: freeing memory at 0x%px\n", new_bpf_func);
-		bpf_jit_free_exec(new_bpf_func);
+		pr_info("bpf_replace: freeing memory at 0x%px\n", info->new_bpf_func);
+		bpf_jit_free_exec(info->new_bpf_func);
 	}
 
+	synchronize_rcu();
+
+	mutex_unlock(&replace_mutex);
 	debugfs_remove_recursive(replace_dir);
 }
 

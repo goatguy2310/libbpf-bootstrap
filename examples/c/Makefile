@@ -105,24 +105,13 @@ $(BPFTOOL): | $(BPFTOOL_OUTPUT)
 	$(call msg,BPFTOOL,$@)
 	$(Q)$(MAKE) ARCH= CROSS_COMPILE= OUTPUT=$(BPFTOOL_OUTPUT)/ -C $(BPFTOOL_SRC) bootstrap
 
-# $(HEADER_OVERRIDE): bpf_core_read.h $(LIBBPF_OBJ) $(BPFTOOL)
-# 	$(call msg,MKDIR,$@)
-# 	$(Q)mkdir -p $@ $@/bpf
-#	$(call msg,GENHEADER,$@)
-#	$(Q)cp $(abspath $(OUTPUT))/bpf/bpf_helpers.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_helpers.h
-#	$(Q/)cp bpf_core_read.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_core_read.h
-#	$(Q)python3 scripts/map_bpf_helper.py scripts/bpf_id_func_mapping.txt
-#	$(Q)python3 scripts/modify_header.py $(abspath $(OUTPUT))/bpf/bpf_helper_defs.h $(abspath $(HEADER_OVERRIDE))/bpf/bpf_helper_defs.h scripts/bpf_id_func_mapping.txt
-
 # Build BPF code to native code (First task)
-$(BPF_OUTPUT)/%.bpf: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPF_OUTPUT) $(BPFTOOL)
-	$(call msg,BPF,$@)
-	$(if $(wildcard $(HEADER_OVERRIDE)/$(PROG_TYPE)/),$(call msg,HEADER,$(HEADER_OVERRIDE)/$(PROG_TYPE)/)) 
-	$(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(call msg,LINKSCRIPT,$(LINKER_SCRIPTS)/$*.ld)) 
-	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                                        \
-		$(if $(wildcard $(HEADER_OVERRIDE)/$(PROG_TYPE)/),-I$(HEADER_OVERRIDE)/$(PROG_TYPE)/) \
-		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		                                      \
-		$(if $(wildcard $(LINKER_SCRIPTS)/$*.ld),$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*.ld)   \
+$(BPF_OUTPUT)/%.bpf: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(HEADER_OVERRIDE)/$(PROG_TYPE) $(LINKER_SCRIPTS)/%.ld $(VMLINUX) | $(OUTPUT) $(BPF_OUTPUT) $(BPFTOOL)
+	$(call msg,BPF,$@) 
+	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                \
+		-I$(HEADER_OVERRIDE)/$(PROG_TYPE)/                            \
+		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		              \
+		$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*.ld                     \
 		$< -o $@
 
 # --------------------------------------------------
