@@ -353,7 +353,7 @@ static long (* const bpf_tail_call)(void *ctx, void *prog_array_map, __u32 index
 		bpf_prog = (void *) access_ptr_at(prog_array_map, indexed_elem_offset(index));	\
 		if (bpf_prog)	{\
 			func = (int (*)(void *)) access_ptr_at(bpf_prog, bpf_prog_fn_offset);	\
-			return func(ctx);	\
+			__attribute__ ((musttail)) return func(ctx);	\
 		}	\
 	} while (0)
 
