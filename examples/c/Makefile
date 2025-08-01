@@ -29,12 +29,14 @@ VMLINUX_SRC := /sys/kernel/btf/vmlinux
 INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 
-CFLAGS_BPF := -Wno-unknown-attributes -mcmodel=large -fno-pie -nopie -nostartfiles -fno-omit-frame-pointer -fcf-protection
+CFLAGS_BPF := -Wno-unknown-attributes -mcmodel=medium -fno-pic -fno-pie -no-pie      \
+	      -nostartfiles -fno-omit-frame-pointer -fcf-protection -mskip-rax-setup \
+	      -fno-jump-tables -mno-red-zone
 
 LINKER_SCRIPTS := .linker_scripts
 LINKING_COMMAND := -Wl,-T,
 
-APPS = minimal bootstrap kprobe
+APPS = minimal bootstrap kprobe tc sockfilter task_iter
 # minimal minimal_legacy minimal_ns bootstrap uprobe kprobe fentry \
        usdt sockfilter tc ksyscall task_iter lsm
 
@@ -108,7 +110,7 @@ $(BPFTOOL): | $(BPFTOOL_OUTPUT)
 # Build BPF code to native code (First task)
 $(BPF_OUTPUT)/%.bpf: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(HEADER_OVERRIDE)/$(PROG_TYPE) $(LINKER_SCRIPTS)/%.ld $(VMLINUX) | $(OUTPUT) $(BPF_OUTPUT) $(BPFTOOL)
 	$(call msg,BPF,$@) 
-	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                \
+	$(Q)$(CLANG) -O3 -flto -D__TARGET_ARCH_$(ARCH) $(CFLAGS_BPF)                \
 		-I$(HEADER_OVERRIDE)/$(PROG_TYPE)/                            \
 		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		              \
 		$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*.ld                     \

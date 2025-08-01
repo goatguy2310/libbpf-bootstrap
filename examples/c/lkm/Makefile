@@ -1,4 +1,4 @@
-obj-m := replace.o
+obj-m := replace_multiple.o
 
 GCC := gcc-11
 KERNEL_DIR := /lib/modules/$(shell uname -r)/build

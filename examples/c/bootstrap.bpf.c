@@ -22,45 +22,6 @@ struct {
 
 const volatile unsigned long long min_duration_ns = 0;
 
-SEC("tp/sched/sched_process_exec")
-int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
-{
-	struct task_struct *task;
-	unsigned fname_off;
-	struct event *e;
-	pid_t pid;
-	u64 ts;
-
-	/* remember time exec() was executed for this PID */
-	pid = bpf_get_current_pid_tgid() >> 32;
-	ts = bpf_ktime_get_ns();
-	bpf_map_update_elem(&exec_start, &pid, &ts, BPF_ANY);
-
-	/* don't emit exec events when minimum duration is specified */
-	if (min_duration_ns)
-		return 0;
-
-	/* reserve sample from BPF ringbuf */
-	e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-	if (!e)
-		return 0;
-
-	/* fill out the sample with data */
-	task = (struct task_struct *)bpf_get_current_task();
-
-	e->exit_event = false;
-	e->pid = pid;
-	e->ppid = BPF_CORE_READ(task, real_parent, tgid);
-	bpf_get_current_comm(&e->comm, sizeof(e->comm));
-
-	fname_off = ctx->__data_loc_filename & 0xFFFF;
-	bpf_probe_read_str(&e->filename, sizeof(e->filename), (void *)ctx + fname_off);
-
-	/* successfully submit it to user-space for post-processing */
-	bpf_ringbuf_submit(e, 0);
-	return 0;
-}
-
 SEC("tp/sched/sched_process_exit")
 int handle_exit(struct trace_event_raw_sched_process_template *ctx)
 {
@@ -107,5 +68,75 @@ int handle_exit(struct trace_event_raw_sched_process_template *ctx)
 
 	/* send data to user-space for post-processing */
 	bpf_ringbuf_submit(e, 0);
+
+	// bonjour(0, 2);
+	// bpf_loop(1, bonjour, (void *) 0, 0);
+	return 0;
+}
+
+struct {
+	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+	__uint(key_size, sizeof(u32));
+	__uint(max_entries, 1);
+	__array(values, u32 (void *));
+} progs SEC(".maps") = {
+	.values = {
+		[0] = (void *)&handle_exit
+	},
+};
+
+SEC("tp/sched/sched_process_exit")
+int handle_exit2(struct trace_event_raw_sched_process_template *ctx)
+{
+	int pid = bpf_get_current_pid_tgid() >> 32;
+	bpf_printk("woah %d\n", pid);
+	bpf_tail_call(ctx, &progs, 0);
+
+	// int (*tail)(void *) = (int (*)(void *)) 123;
+	// return tail(ctx);
+
+	return 0;
+}
+
+SEC("tp/sched/sched_process_exec")
+int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
+{
+	struct task_struct *task;
+	unsigned fname_off;
+	struct event *e;
+	pid_t pid;
+	u64 ts;
+
+	/* remember time exec() was executed for this PID */
+	pid = bpf_get_current_pid_tgid() >> 32;
+	ts = bpf_ktime_get_ns();
+	bpf_map_update_elem(&exec_start, &pid, &ts, BPF_ANY);
+
+	/* don't emit exec events when minimum duration is specified */
+	if (min_duration_ns)
+		return 0;
+
+	/* reserve sample from BPF ringbuf */
+	e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+	if (!e)
+		return 0;
+
+	/* fill out the sample with data */
+	task = (struct task_struct *)bpf_get_current_task();
+
+	e->exit_event = false;
+	e->pid = pid;
+	e->ppid = BPF_CORE_READ(task, real_parent, tgid);
+	bpf_get_current_comm(&e->comm, sizeof(e->comm));
+
+	fname_off = ctx->__data_loc_filename & 0xFFFF;
+	bpf_probe_read_str(&e->filename, sizeof(e->filename), (void *)ctx + fname_off);
+
+	/* successfully submit it to user-space for post-processing */
+	bpf_ringbuf_submit(e, 0);
+
+	// bonjour(0, 1);
+	// bpf_loop(1, bonjour, (void *) 0, 0);
+	// bpf_tail_call(ctx, &progs, 0);
 	return 0;
 }

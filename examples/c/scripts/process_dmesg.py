@@ -1,6 +1,8 @@
 from pathlib import Path
 import argparse
 
+import json
+
 script_path = Path(__file__).resolve().parent
 parent_path = script_path.parent
 
@@ -40,7 +42,10 @@ with open(ld_template) as f:
 with open(parent_path / args.log_file, "r") as f:
     for line in f:
         data = log_line_to_dict(line)
-        if not data or "pid" not in data or data["pid"] != args.pid:
+        if not data or "pid" not in data:
+            continue
+    
+        if data["pid"] != args.pid and args.pid != "-1":
             continue
 
         if data["type"] == "map" and not data["name"].startswith("libbpf_"):
@@ -48,16 +53,18 @@ with open(parent_path / args.log_file, "r") as f:
         elif data["type"] == "intsec":
             internal_addr += "\t" + data['sec_name'] + " 0x" + data['addr'] + ": { *(" + data['sec_name'] + "*) }\n"
         elif data["type"] == "load_end" and len(data["prog_name"]):
-            progs[data["prog_name"]] = (data["cur_prog_type"], data["prog_addr"])    
+            prog_type = data["cur_prog_type"]
+            if prog_type not in progs:
+                progs[prog_type] = []
+            progs[prog_type].append((data["prog_name"], data["prog_addr"]))    
 
 script = template.replace("MAP_PLACEHOLDER", map_addr).replace("INTERNAL_PLACEHOLDER", internal_addr)
 
 # print(script)
+print("\n".join(progs.keys()))
 
 with open(parent_path / f".linker_scripts/{args.prog}.ld", "w") as f:
     f.write(script)
 
-with open(script_path/ "progs_info.csv", "w") as f:
-    f.write("name, type, addr\n")
-    for name, (ptype, addr) in progs.items():
-        f.write(f"{name},{ptype},{addr}\n")
+with open(parent_path / "logs/progs_info.json", "w") as f:
+    f.write(json.dumps(progs))
