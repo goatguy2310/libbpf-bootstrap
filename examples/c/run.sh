@@ -59,6 +59,15 @@ mkdir .header_override
 
 python3 scripts/fn_name_to_hex.py
 
+function terminate() {
+	rmmod $MODULE_NAME
+	kill $BIN_PID
+
+	log "Build failed. Exiting..."
+
+	exit 1
+}
+
 log "Looping through all progs..."
 while IFS= read -r PROG_TYPE; do
 	if [ -d ".header_override/$PROG_TYPE" ]; then
@@ -78,8 +87,16 @@ while IFS= read -r PROG_TYPE; do
 	log "(TYPE=$PROG_TYPE) Making BPF native code..."
 	make .bpf_output/$1.bpf PROG_TYPE=$PROG_TYPE
 
+	if [[ $? -ne 0 ]]; then
+		terminate
+	fi
+
 	log "(TYPE=$PROG_TYPE) Extracting functions from $1 and writing to kernel module..."
 	python3 scripts/extract_funcs_from_bin_type.py .bpf_output/$1.bpf $PROG_TYPE -o scripts/func.out
+	if [[ $? -ne 0 ]]; then
+		terminate
+	fi
+	
 	cat scripts/func.out > /sys/kernel/debug/bpf_replace/prog_to_replace
 
 	log "(TYPE=$PROG_TYPE) Replacing PROG_TYPE=$PROG_TYPE success!"
