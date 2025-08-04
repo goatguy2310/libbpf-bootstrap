@@ -6,6 +6,10 @@ log() {
 
 mkdir -p logs .linker_scripts
 
+PROG_NAME="$1"
+shift
+REST="$@"
+
 BIN_OUTPUT="logs/bin_stdout_logs.txt"
 DMESG_LOG="logs/dmesg_logs.txt"
 PROGS_INFO="scripts/progs_info.csv"
@@ -15,34 +19,36 @@ log "Building loader (if not existed)"
 
 make loader
 
-if [ ! -f .loader_output/$1 ]; then
-	log "No loader at .loader_output/$1"
+if [ ! -f .loader_output/$PROG_NAME ]; then
+	log "No loader at .loader_output/$PROG_NAME"
 	exit 1
 fi
 
 log "Starting dmesg capture"
 
+rm -rf $DMESG_LOG
 dmesg -W > $DMESG_LOG &
 DMESG_PID=$!
 
-./.loader_output/$1 &>$BIN_OUTPUT &
+rm -rf $BIN_OUTPUT
+./.loader_output/$PROG_NAME $REST &>$BIN_OUTPUT &
 BIN_PID=$!
 
-log "Starting program $1 with PID=$BIN_PID"
+log "Starting program $PROG_NAME with PID=$BIN_PID"
 
 # while ! grep -q "EBPF_INFO: type=load_end pid=$BIN_PID" $DMESG_LOG;
 # do
 # 	sleep 1
 # done
 
-tail -n 0 -f $DMESG_LOG | grep -q -m 2 "EBPF_INFO: type=load_end .* pid=$BIN_PID" 
+tail -n 0 -f $DMESG_LOG | grep -q -m 1 "EBPF_INFO: type=load_end .* pid=$BIN_PID" 
 
 log "Message captured at $DMESG_LOG!!"
 log "Processing logs and running linker script generation..."
 
-TYPES=$(python3 scripts/process_dmesg.py $1 $BIN_PID $DMESG_LOG)
+TYPES=$(python3 scripts/process_dmesg.py $PROG_NAME $BIN_PID $DMESG_LOG)
 
-log "Linker script saved at .linker_scripts/$1.ld"
+log "Linker script saved at .linker_scripts/$PROG_NAME.ld"
 
 kill $DMESG_PID
 
@@ -85,14 +91,14 @@ while IFS= read -r PROG_TYPE; do
 	fi
 
 	log "(TYPE=$PROG_TYPE) Making BPF native code..."
-	make .bpf_output/$1.bpf PROG_TYPE=$PROG_TYPE -j`nproc`
+	make .bpf_output/$PROG_NAME.bpf PROG_TYPE=$PROG_TYPE -j`nproc`
 
 	if [[ $? -ne 0 ]]; then
 		terminate
 	fi
 
-	log "(TYPE=$PROG_TYPE) Extracting functions from $1 and writing to kernel module..."
-	python3 scripts/extract_funcs_from_bin_type.py .bpf_output/$1.bpf $PROG_TYPE -o scripts/func.out
+	log "(TYPE=$PROG_TYPE) Extracting functions from $PROG_NAME and writing to kernel module..."
+	python3 scripts/extract_funcs_from_bin_type.py .bpf_output/$PROG_NAME.bpf $PROG_TYPE -o scripts/func.out
 	if [[ $? -ne 0 ]]; then
 		terminate
 	fi

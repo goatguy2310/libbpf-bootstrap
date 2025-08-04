@@ -60,7 +60,9 @@ with open(parent_path / args.log_file, "r") as f:
             prog_type = data["cur_prog_type"]
             if prog_type not in progs:
                 progs[prog_type] = []
-            progs[prog_type].append((data["prog_name"], data["prog_addr"]))    
+            entry = (data["prog_name"], data["prog_addr"])
+            if entry not in progs[prog_type]:
+                progs[prog_type].append(entry)
 
 script = extern_var + template.replace("GLOB_PLACEHOLDER", glob_addr).replace("INTERNAL_PLACEHOLDER", internal_addr)
 
