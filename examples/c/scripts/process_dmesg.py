@@ -32,7 +32,8 @@ args = parser.parse_args()
 
 ld_template = script_path / "template.ld"
 
-map_addr = ""
+extern_var = ""
+glob_addr = ""
 internal_addr = ""
 progs = dict()
 
@@ -49,7 +50,10 @@ with open(parent_path / args.log_file, "r") as f:
             continue
 
         if data["type"] == "map" and not data["name"].startswith("libbpf_"):
-            map_addr += f"\t{data['name']} = 0x{data['addr']};\n"
+            glob_addr += f"\t{data['name']} = 0x{data['addr']};\n"
+        elif data["type"] == "intvar":
+            extern_var += f"EXTERN({data['name']})\n"
+            glob_addr += f"\t{data['name']} = 0x{data['addr']};\n"
         elif data["type"] == "intsec":
             internal_addr += "\t" + data['sec_name'] + " 0x" + data['addr'] + ": { *(" + data['sec_name'] + "*) }\n"
         elif data["type"] == "load_end" and len(data["prog_name"]):
@@ -58,7 +62,7 @@ with open(parent_path / args.log_file, "r") as f:
                 progs[prog_type] = []
             progs[prog_type].append((data["prog_name"], data["prog_addr"]))    
 
-script = template.replace("MAP_PLACEHOLDER", map_addr).replace("INTERNAL_PLACEHOLDER", internal_addr)
+script = extern_var + template.replace("GLOB_PLACEHOLDER", glob_addr).replace("INTERNAL_PLACEHOLDER", internal_addr)
 
 # print(script)
 print("\n".join(progs.keys()))

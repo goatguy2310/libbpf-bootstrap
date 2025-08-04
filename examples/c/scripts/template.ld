@@ -1,10 +1,10 @@
 SECTIONS
 {
 	/*
-        for maps
+        for global vars/maps
         ie counter = 0xffff3000;
 	*/
-MAP_PLACEHOLDER
+GLOB_PLACEHOLDER
 	/*
         for the internal sections (bss, data, rodata)
         ie .rodata 0xffff4000 : { *(.rodata*) }

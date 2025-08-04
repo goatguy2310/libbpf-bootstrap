@@ -85,7 +85,7 @@ while IFS= read -r PROG_TYPE; do
 	fi
 
 	log "(TYPE=$PROG_TYPE) Making BPF native code..."
-	make .bpf_output/$1.bpf PROG_TYPE=$PROG_TYPE
+	make .bpf_output/$1.bpf PROG_TYPE=$PROG_TYPE -j`nproc`
 
 	if [[ $? -ne 0 ]]; then
 		terminate
@@ -107,7 +107,7 @@ read -n 1 -s -r
 
 log "Removing module..."
 rmmod $MODULE_NAME # for now
-sleep 1
+sleep 0.5
 kill $BIN_PID # for now
 
 log "Stopping"
