@@ -61,7 +61,34 @@ struct ipv6hdr;
  * 	Map value associated to *key*, or **NULL** if no entry was
  * 	found.
  */
-static void *(* const bpf_map_lookup_elem)(void *map, const void *key) = (void *) 1;
+static void *(* const real_bpf_map_lookup_elem)(void *map, const void *key) = (void *) 1;
+
+#define map_offset(arg) 		(offsetof(struct bpf_map, arg))
+#define array_offset(arg)		(offsetof(struct bpf_array, arg))
+#define bpf_prog_fn_offset		offsetof(struct bpf_prog, bpf_func)
+
+#define indexed_elem_offset(index, elem_size)	(array_offset(value) + (__u64)index * elem_size)
+
+#define access_ptr_void(ptr, offset) (void *)((char *)ptr + offset)
+#define access_ptr_at_u32(ptr, offset) *(u32*)((char *)ptr + offset)
+#define access_ptr_at_u64(ptr, offset) *(u64*)((char *)ptr + offset)
+
+#define bpf_map_lookup_elem(map, key) ({	\
+	void *__elem = NULL;	\
+	do {	\
+		const int type = sizeof(map.type) / sizeof(int); \
+		if (type == BPF_MAP_TYPE_ARRAY) {	\
+			int idx = *(int *) key;	\
+			int max_entries = access_ptr_at_u32(map, map_offset(max_entries));	\
+			int elem_size = access_ptr_at_u32(map, array_offset(elem_size));	\
+			\
+			if (idx < max_entries) __elem = access_ptr_void(map, indexed_elem_offset(idx, elem_size));	\
+		} else {	\
+			__elem = real_bpf_map_lookup_elem(map, key);	\
+		}	\
+	} while (0);	\
+	__elem;	\
+})
 
 /*
  * bpf_map_update_elem
@@ -339,20 +366,14 @@ static long (* const bpf_tail_call)(void *ctx, void *prog_array_map, __u32 index
 	if (prog_array_map.values[index]) __attribute__((musttail)) return prog_array_map.values[index](ctx);
 */
 
-#define prog_map_value_offset		(offsetof(struct bpf_array, value))
-#define indexed_elem_offset(index)	(prog_map_value_offset + sizeof(u64) * index)
-#define bpf_prog_fn_offset		offsetof(struct bpf_prog, bpf_func)
-
-#define access_ptr_at(ptr, offset) *(u64*)((char *)ptr + offset)
-
 #define bpf_tail_call(ctx, prog_array_map, index) \
 	do {	\
 		int (*func)(void *);	\
 		void *bpf_prog;	\
 		\
-		bpf_prog = (void *) access_ptr_at(prog_array_map, indexed_elem_offset(index));	\
-		if (bpf_prog)	{\
-			func = (int (*)(void *)) access_ptr_at(bpf_prog, bpf_prog_fn_offset);	\
+		bpf_prog = (void *) access_ptr_at_u64(prog_array_map, indexed_elem_offset(index, sizeof(u64)));	\
+		if (bpf_prog) {	\
+			func = (int (*)(void *)) access_ptr_at_u64(bpf_prog, bpf_prog_fn_offset);	\
 			return func(ctx);	\
 		}	\
 	} while (0)

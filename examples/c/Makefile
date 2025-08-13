@@ -39,7 +39,7 @@ CFLAGS_BPF := -Wno-unknown-attributes -mcmodel=medium -fno-pic -fno-pie -no-pie 
 LINKER_SCRIPTS := .linker_scripts
 LINKING_COMMAND := -Wl,-T,
 
-APPS = minimal bootstrap kprobe tc sockfilter task_iter
+APPS = minimal minimal_legacy bootstrap kprobe tc sockfilter task_iter
 # minimal minimal_legacy minimal_ns bootstrap uprobe kprobe fentry \
        usdt sockfilter tc ksyscall task_iter lsm
 
