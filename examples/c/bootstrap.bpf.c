@@ -20,6 +20,7 @@ struct {
 	__uint(max_entries, 256 * 1024);
 } rb SEC(".maps");
 
+const volatile char faker[100];
 const volatile unsigned long long min_duration_ns = 0;
 
 SEC("tp/sched/sched_process_exit")
@@ -40,7 +41,9 @@ int handle_exit(struct trace_event_raw_sched_process_template *ctx)
 		return 0;
 
 	/* if we recorded start of the process, calculate lifetime duration */
+	u64 start_lookup = bpf_ktime_get_ns();
 	start_ts = bpf_map_lookup_elem(&exec_start, &pid);
+	bpf_printk("Hash lookup time: %llu", bpf_ktime_get_ns() - start_lookup);
 	if (start_ts)
 		duration_ns = bpf_ktime_get_ns() - *start_ts;
 	else if (min_duration_ns)
@@ -85,16 +88,23 @@ struct {
 	},
 };
 
+// __attribute__((__always_inline__)) static inline int
+__attribute__((__always_inline__)) static inline int test(int pid, struct trace_event_raw_sched_process_template *ctx) {
+	bpf_printk("woah %d%c\n", pid, faker[2]);
+	bpf_tail_call(ctx, &progs, 0);
+	return 0;
+}
+
 SEC("tp/sched/sched_process_exit")
 int handle_exit2(struct trace_event_raw_sched_process_template *ctx)
 {
-	int pid = bpf_get_current_pid_tgid() >> 32;
-	bpf_printk("woah %d\n", pid);
-	bpf_tail_call(ctx, &progs, 0);
+	int pid = bpf_get_current_pid_tgid() >> 32;	
+	// bpf_tail_call(ctx, &progs, 0);
 
 	// int (*tail)(void *) = (int (*)(void *)) 123;
 	// return tail(ctx);
 
+	if (pid % 2) return test(pid, ctx);
 	return 0;
 }
 

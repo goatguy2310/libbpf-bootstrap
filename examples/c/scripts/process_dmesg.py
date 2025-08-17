@@ -55,7 +55,7 @@ with open(parent_path / args.log_file, "r") as f:
             extern_var += f"EXTERN({data['name']})\n"
             glob_addr += f"\t{data['name']} = 0x{data['addr']};\n"
         elif data["type"] == "intsec":
-            internal_addr += "\t" + data['sec_name'] + " 0x" + data['addr'] + ": { *(" + data['sec_name'] + "*) }\n"
+            internal_addr += "\t" + data['sec_name'] + " 0x" + data['addr'] + ": SUBALIGN(1) { *(" + data['sec_name'] + "*) }\n"
         elif data["type"] == "load_end" and len(data["prog_name"]):
             prog_type = data["cur_prog_type"]
             if prog_type not in progs:

@@ -30,7 +30,7 @@ INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 
 CFLAGS_BPF := -Wno-unknown-attributes -mcmodel=medium -fno-pic -fno-pie -no-pie      \
-	      -nostartfiles -fno-omit-frame-pointer -fcf-protection -mskip-rax-setup \
+	      -nostartfiles -fcf-protection=branch -mskip-rax-setup \
 	      -fno-jump-tables -mno-red-zone -mno-sse -mno-sse2 -mno-avx -mno-mmx    \
 	      -mno-80387 -mno-fp-ret-in-387 -fno-delete-null-pointer-checks          \
 	      -Wframe-larger-than=512
