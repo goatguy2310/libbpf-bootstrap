@@ -89,10 +89,23 @@ struct {
 };
 
 // __attribute__((__always_inline__)) static inline int
-__attribute__((__always_inline__)) static inline int test(int pid, struct trace_event_raw_sched_process_template *ctx) {
-	bpf_printk("woah %d%c\n", pid, faker[2]);
+__attribute__((__always_inline__)) static inline int test2(int pid, struct trace_event_raw_sched_process_template *ctx, int idx) {
+	char c = faker[idx] + 100;
+	int something[100] = {};
+	bpf_printk("woah2 %d%c\n", pid, c);
 	bpf_tail_call(ctx, &progs, 0);
+	something[2] = 5;
 	return 0;
+}
+__attribute__((__always_inline__)) static inline int test(int pid, struct trace_event_raw_sched_process_template *ctx) {
+	char c = faker[2] + 60;
+	bpf_printk("woah %d%c\n", pid, c);
+	if (pid < 100) {
+		return test2(pid, ctx, 2);
+	} else if (pid < 200) {
+		return 0;
+	}
+	return test2(pid, ctx, 0);
 }
 
 SEC("tp/sched/sched_process_exit")
@@ -104,8 +117,10 @@ int handle_exit2(struct trace_event_raw_sched_process_template *ctx)
 	// int (*tail)(void *) = (int (*)(void *)) 123;
 	// return tail(ctx);
 
-	if (pid % 2) return test(pid, ctx);
-	return 0;
+	if (pid % 2 == 0) return test(pid, ctx);
+	bpf_printk("kkk\n");
+	
+	return test2(pid - 1, ctx, 1);
 }
 
 SEC("tp/sched/sched_process_exec")

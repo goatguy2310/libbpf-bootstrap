@@ -87,7 +87,7 @@ while IFS= read -r PROG_TYPE; do
 		cp bpf_core_read.h .header_override/$PROG_TYPE/bpf/bpf_core_read.h
 
 		# generating new helper defs
-		python3 scripts/modify_header.py bpf_helper_defs.h .header_override/$PROG_TYPE/bpf/bpf_helper_defs.h $PROG_TYPE scripts/prog_helper_addr.csv
+		python3 scripts/modify_header.py bpf_helper_defs.h .header_override/$PROG_TYPE/bpf/bpf_helper_defs.h $PROG_TYPE helper_show/helper_addr_fn.csv 
 	fi
 
 	log "(TYPE=$PROG_TYPE) Making BPF native code..."

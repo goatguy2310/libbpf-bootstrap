@@ -52,18 +52,14 @@ struct ipv6hdr;
 #endif
 #endif
 
-/*
- * bpf_map_lookup_elem
- *
- * 	Perform a lookup in *map* for an entry associated to *key*.
- *
- * Returns
- * 	Map value associated to *key*, or **NULL** if no entry was
- * 	found.
- */
-static void *(* const real_bpf_map_lookup_elem)(void *map, const void *key) = (void *) 1;
+// JB: Start of JB definitions
+#define _KS_CPU_NUMER <cpu_number>
+#define _KS_THIS_CPU_OFF <this_cpu_off>
+
+#define offsetof(TYPE, MEMBER) __builtin_offsetof(TYPE, MEMBER)
 
 #define map_offset(arg) 		(offsetof(struct bpf_map, arg))
+#define map_ops_offset(args)		(offsetof(struct bpf_map_ops, args))
 #define array_offset(arg)		(offsetof(struct bpf_array, arg))
 #define bpf_prog_fn_offset		offsetof(struct bpf_prog, bpf_func)
 
@@ -73,22 +69,93 @@ static void *(* const real_bpf_map_lookup_elem)(void *map, const void *key) = (v
 #define access_ptr_at_u32(ptr, offset) *(u32*)((char *)ptr + offset)
 #define access_ptr_at_u64(ptr, offset) *(u64*)((char *)ptr + offset)
 
-#define bpf_map_lookup_elem(map, key) ({	\
+// JB: Inline def for each map ops
+#define BPF_MAP_OPS_INLINE(name, pref, ret_type, decl_args, type_args, func_params)	\
+	__attribute__((__always_inline__)) static inline ret_type pref##bpf_##name decl_args {	\
+		return ((ret_type (*) type_args) (	\
+					access_ptr_at_u64(access_ptr_at_u64(map, map_offset(ops)), map_ops_offset(name))	\
+				)) func_params;	\
+	}
+
+/*
+ * bpf_map_lookup_elem
+ *
+ * 	Perform a lookup in *map* for an entry associated to *key*.
+ *
+ * Returns
+ * 	Map value associated to *key*, or **NULL** if no entry was
+ * 	found.
+ */
+// static void *(* const real_bpf_map_lookup_elem)(void *map, const void *key) = (void *) 1;
+
+// JB: Real lookup elem definition
+BPF_MAP_OPS_INLINE(map_lookup_elem, real_,
+		void*,
+		(void* map, void* key),
+		(void*, void*),
+		(map, key))
+
+// JB: Start of lookup elem inline for simple cases (array lookup, percpu array, array of maps)
+#define add_percpu_off(var) \
+	asm volatile (	\
+		"add %%gs:%1, %0"	\
+		: "+r"(var)	\
+		: "m"(*(__u64*) _KS_THIS_CPU_OFF)	\
+		: "cc", "memory"	\
+	)
+
+#define sizeof_member(map, member) sizeof(*((map)->member))
+#define inlined_bpf_map_lookup_elem(map, key) ({	\
 	void *__elem = NULL;	\
-	do {	\
-		const int type = sizeof(map.type) / sizeof(int); \
-		if (type == BPF_MAP_TYPE_ARRAY) {	\
-			int idx = *(int *) key;	\
-			int max_entries = access_ptr_at_u32(map, map_offset(max_entries));	\
-			int elem_size = access_ptr_at_u32(map, array_offset(elem_size));	\
-			\
-			if (idx < max_entries) __elem = access_ptr_void(map, indexed_elem_offset(idx, elem_size));	\
-		} else {	\
-			__elem = real_bpf_map_lookup_elem(map, key);	\
+	\
+	const int type = sizeof_member(map, type) / sizeof(int); \
+	if (type == BPF_MAP_TYPE_ARRAY) {	\
+		__u32 idx = *(__u32 *) key;	\
+		const __u32 max_entries = sizeof_member(map, max_entries) / sizeof(int);	\
+		const __u32 elem_size = __builtin_align_up(sizeof_member(map, value), 8);	\
+		\
+		if (idx < max_entries) __elem = access_ptr_void(map, indexed_elem_offset(idx, elem_size));	\
+	} else if (type == BPF_MAP_TYPE_ARRAY_OF_MAPS) {	\
+		__u32 idx = *(__u32 *) key;	\
+		const __u32 max_entries = sizeof_member(map, max_entries) / sizeof(int);	\
+		const __u32 elem_size = sizeof(__u64);	\
+		\
+		if (idx < max_entries) __elem = (void *) access_ptr_at_u64(map, indexed_elem_offset(idx, elem_size));	\
+	} else if (type == BPF_MAP_TYPE_PERCPU_ARRAY) {	\
+		__u32 idx = *(__u32 *) key;	\
+		const __u32 max_entries = sizeof_member(map, max_entries) / sizeof(int);	\
+		const __u32 elem_size = sizeof(__u64);	\
+		\
+		if (idx < max_entries) {	\
+			__elem = (void *) access_ptr_at_u64(map, indexed_elem_offset(idx, elem_size));	\
+			/* adjust the offset to the correct percpu memory area */	\
+			add_percpu_off(__elem);	\
 		}	\
-	} while (0);	\
+	} else {	\
+		__elem = real_bpf_map_lookup_elem(map, key);	\
+	}	\
 	__elem;	\
 })
+
+// JB: Even if we use __builtin_choose_expr, the compiler still evaluates and parses void* to the inline branch, causing
+// errors. For this, we define a fake map so that void* can be casted to struct __fake_map__* for this evaluation
+struct __fake_map__ {
+	unsigned int *type;
+	unsigned int *max_entries;
+	unsigned int *value;
+};
+
+#define __cast_fake(ptr) __builtin_choose_expr(	\
+	__builtin_types_compatible_p(typeof(ptr), void*),	\
+	(struct __fake_map__*) ptr,	\
+	ptr	\
+)
+
+#define bpf_map_lookup_elem(map, key) __builtin_choose_expr(	\
+	__builtin_types_compatible_p(typeof(map), void*),	\
+	real_bpf_map_lookup_elem(map, key),	\
+	inlined_bpf_map_lookup_elem(__cast_fake(map), key)	\
+)
 
 /*
  * bpf_map_update_elem
@@ -110,7 +177,13 @@ static void *(* const real_bpf_map_lookup_elem)(void *map, const void *key) = (v
  * Returns
  * 	0 on success, or a negative error in case of failure.
  */
-static long (* const bpf_map_update_elem)(void *map, const void *key, const void *value, __u64 flags) = (void *) 2;
+// static long (* const bpf_map_update_elem)(void *map, const void *key, const void *value, __u64 flags) = (void *) 2;
+
+BPF_MAP_OPS_INLINE(map_update_elem,,
+		int,
+		(void* map, void* key, void* value, unsigned long long flags),
+		(void*, void*, void*, unsigned long long),
+		(map, key, value, flags))
 
 /*
  * bpf_map_delete_elem
@@ -120,7 +193,13 @@ static long (* const bpf_map_update_elem)(void *map, const void *key, const void
  * Returns
  * 	0 on success, or a negative error in case of failure.
  */
-static long (* const bpf_map_delete_elem)(void *map, const void *key) = (void *) 3;
+// static long (* const bpf_map_delete_elem)(void *map, const void *key) = (void *) 3;
+
+BPF_MAP_OPS_INLINE(map_delete_elem,,
+		int,
+		(void* map, void* key),
+		(void*, void*),
+		(map, key))
 
 /*
  * bpf_probe_read
@@ -238,7 +317,14 @@ static __u32 (* const bpf_get_prandom_u32)(void) = (void *) 7;
  * Returns
  * 	The SMP id of the processor running the program.
  */
-static __bpf_fastcall __u32 (* const bpf_get_smp_processor_id)(void) = (void *) 8;
+// static __bpf_fastcall __u32 (* const bpf_get_smp_processor_id)(void) = (void *) 8;
+
+//JB: Redefine get_smp_processor_id based on cpu_number and this_cpu_off extracted from kallsyms
+#define bpf_get_smp_processor_id() ({	\
+	__u64 __percpu_id = _KS_CPU_NUMBER;	\
+	add_percpu_off(__percpu_id);	\
+	*(__u64*) __percpu_id;	\
+})
 
 /*
  * bpf_skb_store_bytes
@@ -366,6 +452,7 @@ static long (* const bpf_tail_call)(void *ctx, void *prog_array_map, __u32 index
 	if (prog_array_map.values[index]) __attribute__((musttail)) return prog_array_map.values[index](ctx);
 */
 
+// JB: Redefining tail call as well, as there isn't an explicit tail call function. Moreover, clang is much stricter about TCO than eBPF.
 #define bpf_tail_call(ctx, prog_array_map, index) \
 	do {	\
 		int (*func)(void *);	\
@@ -2338,7 +2425,13 @@ static long (* const bpf_sk_release)(void *sock) = (void *) 86;
  * Returns
  * 	0 on success, or a negative error in case of failure.
  */
-static long (* const bpf_map_push_elem)(void *map, const void *value, __u64 flags) = (void *) 87;
+// static long (* const bpf_map_push_elem)(void *map, const void *value, __u64 flags) = (void *) 87;
+
+BPF_MAP_OPS_INLINE(map_push_elem,,
+		int,
+		(void* map, void* value, unsigned long long flags),
+		(void*, void*, unsigned long long),
+		(map, value, flags))
 
 /*
  * bpf_map_pop_elem
@@ -2348,7 +2441,13 @@ static long (* const bpf_map_push_elem)(void *map, const void *value, __u64 flag
  * Returns
  * 	0 on success, or a negative error in case of failure.
  */
-static long (* const bpf_map_pop_elem)(void *map, void *value) = (void *) 88;
+// static long (* const bpf_map_pop_elem)(void *map, void *value) = (void *) 88;
+
+BPF_MAP_OPS_INLINE(map_pop_elem,,
+		int,
+		(void* map, void* value),
+		(void*, void*),
+		(map, value))
 
 /*
  * bpf_map_peek_elem
@@ -2358,7 +2457,13 @@ static long (* const bpf_map_pop_elem)(void *map, void *value) = (void *) 88;
  * Returns
  * 	0 on success, or a negative error in case of failure.
  */
-static long (* const bpf_map_peek_elem)(void *map, void *value) = (void *) 89;
+// static long (* const bpf_map_peek_elem)(void *map, void *value) = (void *) 89;
+
+BPF_MAP_OPS_INLINE(map_peek_elem,,
+		int,
+		(void* map, void* value),
+		(void*, void*),
+		(map, value))
 
 /*
  * bpf_msg_push_data
