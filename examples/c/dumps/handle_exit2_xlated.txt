@@ -1,0 +1,67 @@
+int handle_exit2(struct trace_event_raw_sched_process_template * ctx):
+; int handle_exit2(struct trace_event_raw_sched_process_template *ctx)
+   0: (bf) r6 = r1
+; int pid = bpf_get_current_pid_tgid() >> 32;	
+   1: (85) call bpf_get_current_pid_tgid#813712
+   2: (bf) r7 = r0
+; int pid = bpf_get_current_pid_tgid() >> 32;	
+   3: (77) r7 >>= 32
+; if (pid % 2 == 0) return test(pid, ctx);
+   4: (bf) r1 = r7
+   5: (57) r1 &= 1
+; if (pid % 2 == 0) return test(pid, ctx);
+   6: (55) if r1 != 0x0 goto pc+27
+; char c = faker[2] + 60;
+   7: (18) r1 = map[id:6][0]+36
+   9: (71) r4 = *(u8 *)(r1 +2)
+; char c = faker[2] + 60;
+  10: (67) r4 <<= 56
+  11: (18) r1 = 0x3c00000000000000
+; bpf_printk("woah %d%c\n", pid, c);
+  13: (0f) r4 += r1
+  14: (c7) r4 s>>= 56
+  15: (18) r1 = map[id:6][0]+136
+  17: (b7) r2 = 11
+  18: (bf) r3 = r7
+  19: (85) call bpf_trace_printk#-234160
+; char c = faker[2] + 60;
+  20: (18) r1 = map[id:6][0]+36
+  22: (07) r1 += 2
+; int pid = bpf_get_current_pid_tgid() >> 32;	
+  23: (bf) r3 = r7
+  24: (67) r3 <<= 32
+  25: (c7) r3 s>>= 32
+  26: (b7) r2 = 100
+; if (pid < 100) {
+  27: (6d) if r2 s> r3 goto pc+15
+  28: (b7) r2 = 200
+  29: (18) r1 = map[id:6][0]+36
+  31: (bf) r3 = r7
+; } else if (pid < 200) {
+  32: (2d) if r2 > r7 goto pc+25
+  33: (05) goto pc+9
+; bpf_printk("kkk\n");
+  34: (18) r1 = map[id:6][0]+31
+  36: (b7) r2 = 5
+  37: (85) call bpf_trace_printk#-234160
+  38: (18) r1 = map[id:6][0]+36
+  40: (07) r1 += 1
+; return test2(pid - 1, ctx, 1);
+  41: (07) r7 += -1
+  42: (bf) r3 = r7
+; 
+  43: (71) r4 = *(u8 *)(r1 +0)
+  44: (67) r4 <<= 56
+  45: (18) r1 = 0x6400000000000000
+  47: (0f) r4 += r1
+  48: (c7) r4 s>>= 56
+  49: (18) r1 = map[id:6][0]+147
+  51: (b7) r2 = 12
+  52: (85) call bpf_trace_printk#-234160
+  53: (bf) r1 = r6
+  54: (18) r2 = map[id:4]
+  56: (b7) r3 = 0
+  57: (85) call bpf_tail_call#12
+; }
+  58: (b7) r0 = 0
+  59: (95) exit

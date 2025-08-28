@@ -1,0 +1,99 @@
+int handle_exit2(struct trace_event_raw_sched_process_template * ctx):
+bpf_prog_e9f5ae25ad309317_handle_exit2:
+; int handle_exit2(struct trace_event_raw_sched_process_template *ctx)
+   0:	endbr64
+   4:	nopl   0x0(%rax,%rax,1)
+   9:	xor    %rax,%rax
+   c:	push   %rbp
+   d:	mov    %rsp,%rbp
+  10:	endbr64
+  14:	cmp    $0x21,%rax
+  18:	ja     0xffffffffc03a2468
+  1a:	push   %rax
+  1b:	mov    %rsp,%rax
+  1e:	jmp    0xffffffffc03a2469
+  20:	push   %rax
+  21:	push   %rax
+  22:	push   %rbx
+  23:	push   %r13
+  25:	mov    %rdi,%rbx
+; int pid = bpf_get_current_pid_tgid() >> 32;	
+  28:	call   0xffffffff9e690730
+  2d:	mov    %rax,%r13
+; int pid = bpf_get_current_pid_tgid() >> 32;	
+  30:	shr    $0x20,%r13
+; if (pid % 2 == 0) return test(pid, ctx);
+  34:	mov    %r13,%rdi
+  37:	and    $0x1,%rdi
+; if (pid % 2 == 0) return test(pid, ctx);
+  3b:	test   %rdi,%rdi
+  3e:	jne    0xffffffffc03a2503
+; char c = faker[2] + 60;
+  40:	movabs $0xffa0000008710024,%rdi
+  4a:	movzbq 0x2(%rdi),%rcx
+; char c = faker[2] + 60;
+  4f:	shl    $0x38,%rcx
+  53:	movabs $0x3c00000000000000,%rdi
+; bpf_printk("woah %d%c\n", pid, c);
+  5d:	add    %rdi,%rcx
+  60:	sar    $0x38,%rcx
+  64:	movabs $0xffa0000008710088,%rdi
+  6e:	mov    $0xb,%esi
+  73:	mov    %r13,%rdx
+  76:	call   0xffffffff9e5909f0
+; char c = faker[2] + 60;
+  7b:	movabs $0xffa0000008710024,%rdi
+  85:	add    $0x2,%rdi
+; int pid = bpf_get_current_pid_tgid() >> 32;	
+  89:	mov    %r13,%rdx
+  8c:	shl    $0x20,%rdx
+  90:	sar    $0x20,%rdx
+  94:	mov    $0x64,%esi
+; if (pid < 100) {
+  99:	cmp    %rdx,%rsi
+  9c:	jg     0xffffffffc03a252c
+  9e:	mov    $0xc8,%esi
+  a3:	movabs $0xffa0000008710024,%rdi
+  ad:	mov    %r13,%rdx
+; } else if (pid < 200) {
+  b0:	cmp    %r13,%rsi
+  b3:	ja     0xffffffffc03a2589
+  b9:	jmp    0xffffffffc03a252c
+; bpf_printk("kkk\n");
+  bb:	movabs $0xffa000000871001f,%rdi
+  c5:	mov    $0x5,%esi
+  ca:	call   0xffffffff9e5909f0
+  cf:	movabs $0xffa0000008710024,%rdi
+  d9:	add    $0x1,%rdi
+; return test2(pid - 1, ctx, 1);
+  dd:	add    $0xffffffffffffffff,%r13
+  e1:	mov    %r13,%rdx
+; 
+  e4:	movzbq 0x0(%rdi),%rcx
+  e9:	shl    $0x38,%rcx
+  ed:	movabs $0x6400000000000000,%rdi
+  f7:	add    %rdi,%rcx
+  fa:	sar    $0x38,%rcx
+  fe:	movabs $0xffa0000008710093,%rdi
+ 108:	mov    $0xc,%esi
+ 10d:	call   0xffffffff9e5909f0
+ 112:	mov    %rbx,%rdi
+ 115:	movabs $0xff11000113bcc800,%rsi
+ 11f:	xor    %edx,%edx
+ 121:	mov    -0x10(%rbp),%rax
+ 128:	cmpq   $0x21,(%rax)
+ 12c:	jae    0xffffffffc03a2589
+ 12e:	nopl   0x0(%rax,%rax,1)
+ 133:	addq   $0x1,(%rax)
+ 137:	pop    %r13
+ 139:	pop    %rbx
+ 13a:	pop    %rax
+ 13b:	pop    %rax
+ 13c:	jmp    0xffffffffc03a2218
+; }
+ 141:	xor    %eax,%eax
+ 143:	pop    %r13
+ 145:	pop    %rbx
+ 146:	leave
+ 147:	jmp    0xffffffff9df0410b
+

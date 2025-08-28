@@ -88,23 +88,47 @@ struct {
 	},
 };
 
+struct flow_key {
+  union {
+    __be32 src;
+    __be32 srcv6[4];
+  };
+  union {
+    __be32 dst;
+    __be32 dstv6[4];
+  };
+  union {
+    __u32 ports;
+    __u16 port16[2];
+  };
+  __u8 proto;
+};
+
+struct packet_description {
+  struct flow_key flow;
+  __u32 real_index;
+  __u8 flags;
+  // dscp / ToS value in client's packet
+  __u8 tos;
+};
+
 // __attribute__((__always_inline__)) static inline int
 __attribute__((__always_inline__)) static inline int test2(int pid, struct trace_event_raw_sched_process_template *ctx, int idx) {
-	char c = faker[idx] + 100;
-	int something[100] = {};
+	char c = faker[idx] + 100;	
 	bpf_printk("woah2 %d%c\n", pid, c);
 	bpf_tail_call(ctx, &progs, 0);
-	something[2] = 5;
 	return 0;
 }
 __attribute__((__always_inline__)) static inline int test(int pid, struct trace_event_raw_sched_process_template *ctx) {
 	char c = faker[2] + 60;
+	struct packet_description something = {};
 	bpf_printk("woah %d%c\n", pid, c);
 	if (pid < 100) {
 		return test2(pid, ctx, 2);
 	} else if (pid < 200) {
 		return 0;
 	}
+	something.real_index = something.flow.src = 1;
 	return test2(pid, ctx, 0);
 }
 
@@ -116,7 +140,6 @@ int handle_exit2(struct trace_event_raw_sched_process_template *ctx)
 
 	// int (*tail)(void *) = (int (*)(void *)) 123;
 	// return tail(ctx);
-
 	if (pid % 2 == 0) return test(pid, ctx);
 	bpf_printk("kkk\n");
 	

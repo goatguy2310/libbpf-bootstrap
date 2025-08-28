@@ -455,15 +455,15 @@ static long (* const bpf_tail_call)(void *ctx, void *prog_array_map, __u32 index
 // JB: Redefining tail call as well, as there isn't an explicit tail call function. Moreover, clang is much stricter about TCO than eBPF.
 #define bpf_tail_call(ctx, prog_array_map, index) \
 	do {	\
-		int (*func)(void *);	\
+		int (*func)(typeof(ctx));	\
 		void *bpf_prog;	\
 		\
 		bpf_prog = (void *) access_ptr_at_u64(prog_array_map, indexed_elem_offset(index, sizeof(u64)));	\
 		if (bpf_prog) {	\
-			func = (int (*)(void *)) access_ptr_at_u64(bpf_prog, bpf_prog_fn_offset);	\
+			func = (int (*)(typeof(ctx))) access_ptr_at_u64(bpf_prog, bpf_prog_fn_offset);	\
 			return func(ctx);	\
 		}	\
-	} while (0)
+	} while (0);
 
 /*
  * bpf_clone_redirect

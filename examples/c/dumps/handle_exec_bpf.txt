@@ -1,0 +1,109 @@
+int handle_exec(struct trace_event_raw_sched_process_exec * ctx):
+bpf_prog_c74056bfa148e1ca_handle_exec:
+; int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
+   0:	endbr64
+   4:	nopl   0x0(%rax,%rax,1)
+   9:	nopl   (%rax)
+   c:	push   %rbp
+   d:	mov    %rsp,%rbp
+  10:	endbr64
+  14:	sub    $0x20,%rsp
+  1b:	push   %rbx
+  1c:	push   %r13
+  1e:	push   %r14
+  20:	mov    %rdi,%rbx
+; pid = bpf_get_current_pid_tgid() >> 32;
+  23:	call   0xffffffffa369bcb0
+; pid = bpf_get_current_pid_tgid() >> 32;
+  28:	shr    $0x20,%rax
+; pid = bpf_get_current_pid_tgid() >> 32;
+  2c:	mov    %eax,-0x4(%rbp)
+; ts = bpf_ktime_get_ns();
+  2f:	call   0xffffffffa369c1d0
+; ts = bpf_ktime_get_ns();
+  34:	mov    %rax,-0x10(%rbp)
+  38:	mov    %rbp,%rsi
+; 
+  3b:	add    $0xfffffffffffffffc,%rsi
+  3f:	mov    %rbp,%rdx
+  42:	add    $0xfffffffffffffff0,%rdx
+; bpf_map_update_elem(&exec_start, &pid, &ts, BPF_ANY);
+  46:	movabs $0xffff88800b9e7000,%rdi
+  50:	xor    %ecx,%ecx
+  52:	call   0xffffffffa36c41a0
+; if (min_duration_ns)
+  57:	movabs $0xffffc900004e3000,%rdi
+  61:	mov    0x0(%rdi),%rdi
+; if (min_duration_ns)
+  65:	test   %rdi,%rdi
+  68:	jne    0xffffffffc039ee3a
+  6e:	xor    %r14d,%r14d
+; e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+  71:	movabs $0xffff888005322400,%rdi
+  7b:	mov    $0xa8,%esi
+  80:	xor    %edx,%edx
+  82:	call   0xffffffffa36dee90
+  87:	mov    %rax,%r13
+; if (!e)
+  8a:	test   %r13,%r13
+  8d:	je     0xffffffffc039ee3a
+; task = (struct task_struct *)bpf_get_current_task();
+  93:	call   0xffffffffa3587690
+; e->exit_event = false;
+  98:	mov    %r14b,0xa7(%r13)
+; e->pid = pid;
+  9f:	mov    -0x4(%rbp),%edi
+; e->pid = pid;
+  a2:	mov    %edi,0x0(%r13)
+  a6:	mov    $0x5a0,%edi
+  ab:	add    %rdi,%rax
+  ae:	mov    %rbp,%rdi
+; 
+  b1:	add    $0xffffffffffffffe0,%rdi
+; e->ppid = BPF_CORE_READ(task, real_parent, tgid);
+  b5:	mov    $0x8,%esi
+  ba:	mov    %rax,%rdx
+  bd:	call   0xffffffffa3588dd0
+  c2:	mov    $0x594,%edi
+  c7:	mov    -0x20(%rbp),%rdx
+  cb:	add    %rdi,%rdx
+  ce:	mov    %rbp,%rdi
+; 
+  d1:	add    $0xffffffffffffffec,%rdi
+; e->ppid = BPF_CORE_READ(task, real_parent, tgid);
+  d5:	mov    $0x4,%esi
+  da:	call   0xffffffffa3588dd0
+; e->ppid = BPF_CORE_READ(task, real_parent, tgid);
+  df:	mov    -0x14(%rbp),%edi
+; e->ppid = BPF_CORE_READ(task, real_parent, tgid);
+  e2:	mov    %edi,0x4(%r13)
+; bpf_get_current_comm(&e->comm, sizeof(e->comm));
+  e6:	mov    %r13,%rdi
+  e9:	add    $0x18,%rdi
+; bpf_get_current_comm(&e->comm, sizeof(e->comm));
+  ed:	mov    $0x10,%esi
+  f2:	call   0xffffffffa369c350
+; fname_off = ctx->__data_loc_filename & 0xFFFF;
+  f7:	mov    0x8(%rbx),%edi
+; bpf_probe_read_str(&e->filename, sizeof(e->filename), (void *)ctx + fname_off);
+  fa:	and    $0xffff,%rdi
+ 101:	add    %rdi,%rbx
+; bpf_probe_read_str(&e->filename, sizeof(e->filename), (void *)ctx + fname_off);
+ 104:	mov    %r13,%rdi
+ 107:	add    $0x28,%rdi
+; bpf_probe_read_str(&e->filename, sizeof(e->filename), (void *)ctx + fname_off);
+ 10b:	mov    $0x7f,%esi
+ 110:	mov    %rbx,%rdx
+ 113:	call   0xffffffffa358bf00
+; bpf_ringbuf_submit(e, 0);
+ 118:	mov    %r13,%rdi
+ 11b:	xor    %esi,%esi
+ 11d:	call   0xffffffffa36e01e0
+; }
+ 122:	xor    %eax,%eax
+ 124:	pop    %r14
+ 126:	pop    %r13
+ 128:	pop    %rbx
+ 129:	leave
+ 12a:	ret
+

@@ -33,7 +33,7 @@ CFLAGS_BPF := -Wno-unknown-attributes -mcmodel=medium -fno-pic -fno-pie -no-pie 
 	      -nostartfiles -fcf-protection=branch -mskip-rax-setup \
 	      -fno-jump-tables -mno-red-zone -mno-sse -mno-sse2 -mno-avx -mno-mmx    \
 	      -mno-80387 -mno-fp-ret-in-387 -fno-delete-null-pointer-checks          \
-	      -Wframe-larger-than=512
+	      -Wframe-larger-than=512 -fpatchable-function-entry=5
 
 
 LINKER_SCRIPTS := .linker_scripts
@@ -112,8 +112,8 @@ $(BPFTOOL): | $(BPFTOOL_OUTPUT)
 
 # Build BPF code to native code (First task)
 $(BPF_OUTPUT)/%.bpf: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(HEADER_OVERRIDE)/$(PROG_TYPE) $(LINKER_SCRIPTS)/%.ld $(VMLINUX) | $(OUTPUT) $(BPF_OUTPUT) $(BPFTOOL)
-	$(call msg,BPF,$@) 
-	$(Q)$(CLANG) -O3 -flto -D__TARGET_ARCH_$(ARCH) -D__KERNEL__ $(CFLAGS_BPF)          \
+	$(call msg,BPiF,$@) 
+	$(Q)$(CLANG) -O3 -D__TARGET_ARCH_$(ARCH) -D__KERNEL__ $(CFLAGS_BPF)          \
 		-I$(HEADER_OVERRIDE)/$(PROG_TYPE)/                            \
 		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		              \
 		$(LINKING_COMMAND)$(LINKER_SCRIPTS)/$*.ld                     \

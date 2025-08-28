@@ -62,7 +62,7 @@ for pname in prog_names:
 elf_bin = None
 cur_offset = 0
 with open(args.bin_file, "rb") as f:
-    elf_bin = f.read()
+    elf_bin = bytearray(f.read())
 
 # packing numbers into bytestrings
 prog_size_hex = struct.pack("<I", len(elf_bin))
@@ -72,8 +72,12 @@ progs_hex = struct.pack("<I", len(prog_names))
 for pname in prog_names:
     # for each prog, bpf_prog addr, offset, and code_size
     progs_hex += struct.pack("<Q", int(prog_addr[pname], 16)) + struct.pack("<I", func_offset[pname]) + struct.pack("<I", func_size[pname])
+    # modifying the nop instruction for it to fit kernel's convention
+    elf_bin[func_offset[pname] + 8] = 0x00
+    print(elf_bin[func_offset[pname]:func_offset[pname] + 28].hex(" "))
 
 output = prog_size_hex + elf_bin + progs_hex
+
 # print(output.hex(" "))
 # print(output)
 

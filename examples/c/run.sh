@@ -52,6 +52,9 @@ log "Linker script saved at .linker_scripts/$PROG_NAME.ld"
 
 kill $DMESG_PID
 
+log "Press any key to continue to kernel module processes."
+read -n 1 -s -r
+
 if [ ! -f lkm/$MODULE_NAME.ko ]; then
 	(cd lkm && make)
 	log "Compiling kernel module..."
